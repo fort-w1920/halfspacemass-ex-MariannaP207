@@ -1,79 +1,98 @@
 #### Algorithm 1 
 # Train halfspace mass
 
-train_halfspace_mass <- function(
-           data,                # data set to train on
-           n_halfspace = 2000,  # number of simulated halfspaces
-           subsample = 5,       # subsample of data set; D(i) in Chen et al.
-           scope = 1,           # size parameter; lambda in Chen et al.
-           seed) {
-    
-    data_dim <- dim(data)[2]
-    
-    # create empty matrices and vectors which will be filled with output data
-    directions <- matrix(nrow = n_halfspace, ncol = data_dim)
-    s_i_vector <- 
+train_depth <- function(
+  data,                 # data set to train on
+  n_halfspace = 1L,     # number of simulated halfspaces; t in Chen et al.
+  subsample = 1L,       # subsample fraction of data set; D(i) in Chen et al.
+  scope = 1L,           # size parameter; lambda in Chen et al.
+  seed = 1) {
+  
+  check_inputs(data, n_halfspace, subsample, scope, seed)
+  
+  data_dim <- dim(data)[2]
+  n_subsample <- ceiling(nrow(data) * subsample)
+  
+  # create empty matrix for generated random directions
+  directions <- matrix(nrow = n_halfspace, ncol = data_dim)
+  # create empty vectors for critical points on the generated directions
+  split_vector <- 
           left <-
          right <- vector(mode = "numeric", length = n_halfspace)
-
-    set.seed(seed)
+  
+  set.seed(seed)
+  
+  for (i in seq_len(n_halfspace)) {
     
-    for (i in seq_len(n_halfspace)) {
+    direction <- generate_direction(data_dim) 
+    sampled_data <- get_subsample(data, n_subsample) 
+    projected_subsample <- project_data(direction, sampled_data) 
+    split <- get_split(projected_subsample, scope)
+    fraction_left <- sum(projected_subsample < split) / n_subsample 
+    fraction_right <- sum(projected_subsample >= split) / n_subsample
     
-    direction <- generate_direction(data_dim) # random direction
-    sampled_data <- get_subsample(data, subsample) 
-    projected_subsample <- project_data(direction, sampled_data) # projection
-    s_i <- get_s_i(projected_subsample, scope)
-    fraction_left <- sum(projected_subsample < s_i) / subsample 
-    fraction_right <- sum(projected_subsample >= s_i) / subsample
- 
     directions[i, ] <- direction
-    s_i_vector[i] <- s_i
+    split_vector[i] <- split
     left[i] <- fraction_left
     right[i] <- fraction_right
     
-    }
-
-    HM_list <- list(
-      "directions" = directions,
-      "s_i_points" = s_i_vector,
-      "left" = left,
-      "right" = right
-    )
-    HM_list
   }
+  
+  HM_list <- list(
+    "directions" = directions,
+    "split_points" = split_vector,
+    "left_weights" = left,
+    "right_weights" = right
+  )
+  HM_list
+}
+
+check_inputs <- function(data, 
+                         n_halfspace, subsample, scope, seed) {
+  library(checkmate)
+  assert(check_data_frame(data, types = c("numeric", "integer"), 
+                          any.missing = FALSE, min.rows = 1, min.cols = 1),
+         check_matrix(data, mode = c("numeric", "integerish"),
+                      any.missing = FALSE, min.rows = 1, min.cols = 1),
+         combine = "or")
+  assert_count(n_halfspace, positive = TRUE)
+  assert_numeric(subsample, lower = 0, upper = 1, len = 1, any.missing = FALSE)
+  assert_numeric(scope, lower = 1)
+}
+
 
 # generate random direction by random sampling from standard normal distribution
+# normalize direction for the next projection on it
 generate_direction <- function(dimension) {
   direction <- rnorm(dimension) 
   normalized_direction <- direction / sqrt(sum(direction ^ 2))
   normalized_direction
 }
 
-# get subset of data of size <subsample> without replacement
-get_subsample <- function(data, subsample) {
-  sampled_rows <- sample(nrow(data), subsample, replace = FALSE)
+# get fraction of data of size <subsample> without replacement
+get_subsample <- function(data, n_subsample) {
+  sampled_rows <- sample(nrow(data), n_subsample, replace = FALSE)
   data[sampled_rows, , drop = FALSE]
 }
 
 # project given subsample on the direction vector
-project_data <- function(direction, sampled_data) {
-  projected_data <- as.matrix(sampled_data) %*% direction
+project_data <- function(direction, data) {
+  projected_data <- as.matrix(data) %*% direction
   projected_data
 }
 
 # calculate critical points of projected subsample
 # and randomly select s(i) based on these critical points and scope
-get_s_i <- function(projected_subsample, scope) {
+get_split <- function(projected_subsample, scope) {
   # critical points
   max_point <- max(projected_subsample)
   min_point <- min(projected_subsample)
   mid_point <- (max_point + min_point) / 2
-  # random s(i)
+  # random split point
   span <- max_point - min_point
   deviation <- (scope * span) / 2
   left_bound <- mid_point - deviation
   right_bound <- mid_point + deviation
-  s_i <- runif(1, min = left_bound, max = right_bound)
-  s_i
+  split <- runif(1, min = left_bound, max = right_bound)
+  split
 }
