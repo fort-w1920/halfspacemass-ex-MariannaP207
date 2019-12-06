@@ -94,9 +94,8 @@ get_split <- function(projected_subsample, scope) {
   mid_point <- (max_point + min_point) / 2
   # calculate and return a random split point
   span <- max_point - min_point
-  deviation <- (scope * span) / 2
-  left_bound <- mid_point - deviation
-  right_bound <- mid_point + deviation
+  left_bound <- mid_point - scope * span * 0.5
+  right_bound <- mid_point + scope * span * 0.5
   split <- runif(1, min = left_bound, max = right_bound)
   split
 }

@@ -55,7 +55,6 @@ get_halfspace_mass <- function(data, n_halfspaces,
   hm_new / n_halfspaces
 }
 
-
 get_tukey_depth <- function(hm_new, data_projected, projection_i) {
   for (k in seq_len(length(data_projected))) {
     # find minimum of new data points which are on each side of the projection
